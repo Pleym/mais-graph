@@ -4,7 +4,7 @@ CFLAGS = -Drestrict=__restrict__ -DREUSE_CSR_FOR_VALIDATION -I../aml \
 # Optionnel: pointer TBB_DIR (ex: export TBB_DIR=$(spack location -i tbb))
 TBB_DIR ?=
 TBB_INC = $(if $(TBB_DIR),-I$(TBB_DIR)/include,)
-TBB_LIB = $(if $(TBB_DIR),-L$(TBB_DIR)/lib -L$(TBB_DIR)/lib64 -Wl,-rpath,$(TBB_DIR)/lib -Wl,-rpath,$(TBB_DIR)/lib64,)
+TBB_LIB = $(if $(TBB_DIR),-L$(TBB_DIR)/lib -L$(TBB_DIR)/lib64,)
 
 CFLAGS += $(TBB_INC)
 LDFLAGS = -lm -lpthread -flto $(TBB_LIB) -ltbb -ltbbmalloc -ltbbmalloc_proxy
