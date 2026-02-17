@@ -29,3 +29,17 @@ Où:
 - `scale` = log2(nombre de sommets)
 - `edge_factor` = facteur d'arêtes
 - `roots` = nombre de sources testées pour K2/K3
+
+## Scripts SLURM ROMEO
+
+- [kernel_1_2_experiments.sh](kernel_1_2_experiments.sh): strong scaling (taille fixe, threads variables)
+- [kernel_weak_scaling.sh](kernel_weak_scaling.sh): weak scaling (taille augmente avec le nombre de threads)
+- [kernel_perf_compare.sh](kernel_perf_compare.sh): comparaison référence vs optimisé avec speedup K2/K3
+
+Soumission:
+
+```bash
+sbatch kernel_1_2_experiments.sh
+sbatch kernel_weak_scaling.sh
+sbatch --export=ALL,REF_BIN=./main_ref,OPT_BIN=./main_opt kernel_perf_compare.sh
+```
