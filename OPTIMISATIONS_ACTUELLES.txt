@@ -55,3 +55,56 @@ Remarque
   - principe,
   - impact attendu,
   - impact mesuré (speedup, efficacité, scalabilité).
+
+8) Synthèse des optimisations identifiées dans le PDF (Reducing Communication in Parallel BFS on Distributed Memory Systems)
+- Constat principal du papier:
+  - En BFS distribué, le coût dominant devient la communication (collectives), surtout à grande échelle.
+  - Le calcul local est relativement peu coûteux vs échanges réseau.
+- Optimisation 1: "Sieving" (filtrage des données à envoyer)
+  - Principe: éviter d’envoyer des éléments de frontier inutiles aux processus qui n’en ont pas besoin.
+  - Le papier introduit une "cross directory" distribuée pour savoir quelles colonnes/partitions sont pertinentes.
+  - Effet attendu: réduction du volume des messages avant communication.
+- Optimisation 2: Compression bitmap
+  - Principe: compresser les bitmaps de frontier (beaucoup de zéros) avant échange.
+  - Exemple étudié: WAH (Word-Aligned Hybrid), avec bon compromis coût de compression / taux de réduction.
+  - Effet attendu: réduction supplémentaire du volume transféré.
+- Optimisation 3: Collectives adaptées
+  - Remplacer des patterns de communication trop globaux (type allgather complet) par échanges plus ciblés (alltoallv + buffers compressés/filtrés).
+  - Effet attendu: réduction du trafic inutile et meilleure scalabilité.
+
+9) Intégration ciblée demandée (discussion "full top-down / full bottom-up / hybrid")
+- Variante A: Full Top-Down
+  - Frontier active -> exploration des voisins sortants.
+  - Avantage: performant quand frontier petite (début BFS).
+- Variante B: Full Bottom-Up
+  - Parcours des non-visités et test d’adjacence vers frontier.
+  - Avantage: performant quand frontier très large (milieu BFS sur graphes larges).
+- Variante C: Hybrid (Direction-Optimizing)
+  - Switch top-down <-> bottom-up selon heuristique (ex: m_f vs m_u).
+  - Avantage: combine les points forts des deux approches.
+- Méthode de comparaison prévue:
+  - Mesurer K2 (temps BFS) pour Top-Down, Bottom-Up, Hybrid.
+  - Comparer speedup vs référence sur mêmes jeux de paramètres (scale, edge factor, roots).
+
+10) Remplacement / alternative à la logique type AML par OpenMP (sur cible mononoeud)
+- Objectif pratique du projet actuel:
+  - Prioriser l’optimisation intra-noeud via OpenMP (partage mémoire) plutôt que communication distribuée type AML.
+- Plan technique:
+  - Parallel for sur boucles d’exploration (voisins / sommets non visités).
+  - Structures thread-safe pour frontier/next (bitset atomique, buffers locaux + fusion).
+  - Contrôle d’affinité CPU (OMP_PROC_BIND, OMP_PLACES) déjà activé dans les scripts.
+- Limite connue:
+  - Sur un vrai run multi-noeuds, la réduction de communication inter-noeuds du papier nécessite une implémentation MPI/distribuée complète (cross-directory + compression + collectives ciblées).
+
+11) Prochaines étapes d’implémentation (priorité)
+- Étape 1: stabiliser 3 variantes BFS dans le code
+  - bfs_full_top_down
+  - bfs_full_bottom_up
+  - bfs_hybrid
+- Étape 2: instrumenter précisément les sorties
+  - temps moyen K2 par variante
+  - speedup vs bfs_formal
+- Étape 3: ajouter une option "mode" au binaire
+  - ex: ./main <scale> <edge_factor> <roots> <bfs_mode>
+- Étape 4: (optionnel) prototype compression frontier pour scénario MPI
+  - tester d’abord compression locale (bitmap -> WAH/RLE-like) pour valider le gain brut.
