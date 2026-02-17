@@ -5,7 +5,6 @@
 #include <chrono>
 #include <iostream>
 #include <omp.h>
-#include <tbb/parallel_sort.h>
 #include <vector>
 
 void graph_destroy(graph& g) {

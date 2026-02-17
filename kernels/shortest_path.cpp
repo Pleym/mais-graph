@@ -1,5 +1,6 @@
 #include "shortest_path.hpp"
 #include <assert.h>
+#include <atomic>
 #include <chrono>
 #include <cstring>
 #include <limits>
