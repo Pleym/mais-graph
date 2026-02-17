@@ -549,32 +549,36 @@ typedef struct hybrid_set {
 bfs_result bfs_hybrid(graph& g, int64_t source) {
 	auto start = std::chrono::high_resolution_clock::now();
 
-	hybrid_set frontier(g.nb_nodes);
-	frontier.as_unordered_set().insert(source);
+	// Hybrid with vector frontier + AtomicBitSet and incremental m_u
+	std::vector<int64_t> frontier_vec;
+	frontier_vec.push_back(source);
+	AtomicBitSet frontier_bits(g.nb_nodes);
+	frontier_bits.insert(source);
 
-	hybrid_set next(g.nb_nodes);
+	std::vector<int64_t> next_vec;
+	AtomicBitSet next_bits(g.nb_nodes);
 
-	// Same pointers for both implementations to simplify switching and avoid copying when not needed
-	int64_t* parents = (int64_t*)malloc(g.nb_nodes * sizeof(int64_t));
-	std::atomic<int64_t>* parents_atomic = (std::atomic<int64_t>*)parents;
-	std::fill(parents, parents + g.nb_nodes, -1);
-	parents[source] = source;
+	std::atomic<int64_t>* parents = new std::atomic<int64_t>[g.nb_nodes];
+	for (int64_t i = 0; i < g.nb_nodes; ++i) {
+		parents[i].store(-1, std::memory_order_relaxed);
+	}
+	parents[source].store(source, std::memory_order_relaxed);
+
+	std::vector<char> visited(g.nb_nodes, 0);
+	visited[(size_t)source] = 1;
+
+	std::atomic<int64_t> remaining_edges{g.slicing_idx[g.nb_nodes]};
 
 	bool top_down = true;
 	const double C_TB = 10.0; // threshold for switching top->bottom
 	const double C_BT = 40.0; // threshold for switching bottom->top
 
-	while (!frontier.empty()) {
-		// compute m_f = sum degrees of frontier
-		uint64_t m_f = frontier.sum_of_degrees(g);
-
-		// compute m_u = sum degrees of unexplored vertices
-		uint64_t m_u = 0;
-		for (int64_t v = 0; v < g.nb_nodes; ++v) {
-			if (parents[v] == -1) {
-				m_u += (uint64_t)(g.slicing_idx[v + 1] - g.slicing_idx[v]);
-			}
+	while (!frontier_vec.empty()) {
+		uint64_t m_f = 0;
+		for (int64_t v : frontier_vec) {
+			m_f += (uint64_t)(g.slicing_idx[v + 1] - g.slicing_idx[v]);
 		}
+		uint64_t m_u = (uint64_t)remaining_edges.load(std::memory_order_relaxed);
 
 		if (top_down) {
 			if (m_f > m_u / C_TB) {
@@ -588,22 +592,105 @@ bfs_result bfs_hybrid(graph& g, int64_t source) {
 		}
 
 		if (top_down) {
-			top_down_step(g, frontier.as_unordered_set(), next.as_unordered_set(), parents);
-			frontier.as_unordered_set() = std::move(next.as_unordered_set());
-			next.as_unordered_set().clear();
+			int max_threads = omp_get_max_threads();
+			std::vector<std::vector<int64_t>> locals(max_threads);
+
+#pragma omp parallel
+			{
+				int tid = omp_get_thread_num();
+				auto& local = locals[tid];
+
+#pragma omp for schedule(dynamic, 64)
+				for (size_t idx = 0; idx < frontier_vec.size(); ++idx) {
+					int64_t node = frontier_vec[idx];
+					for_each_neighbor(g, node, [&](int64_t neighbor, float) {
+						int64_t expected = -1;
+						if (parents[neighbor].compare_exchange_strong(expected, node, std::memory_order_relaxed)) {
+							if (!visited[(size_t)neighbor]) {
+								visited[(size_t)neighbor] = 1;
+								remaining_edges.fetch_sub((int64_t)(g.slicing_idx[neighbor + 1] - g.slicing_idx[neighbor]), std::memory_order_relaxed);
+							}
+							local.push_back(neighbor);
+						}
+					});
+				}
+			}
+
+			size_t total = 0;
+			for (auto& v : locals) total += v.size();
+			next_vec.clear();
+			next_vec.reserve(total);
+			for (auto& v : locals) {
+				next_vec.insert(next_vec.end(), v.begin(), v.end());
+			}
+
+			frontier_bits.clear();
+			for (int64_t v : frontier_vec) {
+				frontier_bits.insert(v);
+			}
+
+			next_bits.clear();
+			for (int64_t v : next_vec) {
+				next_bits.insert(v);
+			}
 		}
 		else {
-			bottom_up_step_parallel_bitset(g, frontier.as_bitset(), next.as_bitset(), parents_atomic);
-			atomic_bitset_swap(frontier.as_bitset(), next.as_bitset());
-			next.as_bitset().clear();
+			int max_threads = omp_get_max_threads();
+			std::vector<std::vector<int64_t>> locals(max_threads);
+
+#pragma omp parallel for schedule(dynamic, 1024)
+			for (int64_t node = 0; node < g.nb_nodes; ++node) {
+				if (parents[node].load(std::memory_order_relaxed) != -1) {
+					continue;
+				}
+				int64_t start = g.slicing_idx[node];
+				int64_t end = g.slicing_idx[node + 1];
+				for (int64_t i = start; i < end; ++i) {
+					int64_t neigh = g.neighbors[i];
+					if (frontier_bits.contains(neigh)) {
+						int64_t expected = -1;
+						if (parents[node].compare_exchange_strong(expected, neigh, std::memory_order_relaxed)) {
+							if (!visited[(size_t)node]) {
+								visited[(size_t)node] = 1;
+								remaining_edges.fetch_sub((int64_t)(end - start), std::memory_order_relaxed);
+							}
+							int tid = omp_get_thread_num();
+							locals[tid].push_back(node);
+						}
+						break;
+					}
+				}
+			}
+
+			size_t total = 0;
+			for (auto& v : locals) total += v.size();
+			next_vec.clear();
+			next_vec.reserve(total);
+			for (auto& v : locals) {
+				next_vec.insert(next_vec.end(), v.begin(), v.end());
+			}
+
+			next_bits.clear();
+			for (int64_t v : next_vec) {
+				next_bits.insert(v);
+			}
+			frontier_bits = next_bits;
 		}
+
+		frontier_vec.swap(next_vec);
 	}
+
+	int64_t* parents_out = (int64_t*)malloc(g.nb_nodes * sizeof(int64_t));
+	for (int64_t i = 0; i < g.nb_nodes; ++i) {
+		parents_out[i] = parents[i].load(std::memory_order_relaxed);
+	}
+	delete[] parents;
 
 	auto end = std::chrono::high_resolution_clock::now();
 	auto time_ms = std::chrono::duration<double, std::milli>(end - start).count();
 
 	return (bfs_result){
-		.parent_array = parents,
+		.parent_array = parents_out,
 		.teps = 0.0,
 		.time_ms = time_ms,
 	};

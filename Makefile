@@ -1,5 +1,6 @@
-CFLAGS = -Drestrict=__restrict__ -O3 -DREUSE_CSR_FOR_VALIDATION -I../aml -march=native -fopenmp
-LDFLAGS = -lm -lpthread -ltbb
+CFLAGS = -Drestrict=__restrict__ -DREUSE_CSR_FOR_VALIDATION -I../aml \
+	-march=znver4 -Ofast -flto -funroll-loops -fomit-frame-pointer -fno-math-errno -DNDEBUG -fopenmp
+LDFLAGS = -lm -lpthread -ltbb -flto
 MPICC = mpicxx
 
 all: main

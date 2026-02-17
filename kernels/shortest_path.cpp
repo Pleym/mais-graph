@@ -137,27 +137,26 @@ shortest_path sssp_bf_frontier_omp(graph g, int64_t root) {
 	sp.distance_array = (float*)malloc(N * sizeof(float));
 	sp.parent_array = (int64_t*)malloc(N * sizeof(int64_t));
 
+	std::atomic<float>* dist = new std::atomic<float>[N];
+	std::atomic<int64_t>* parent = new std::atomic<int64_t>[N];
 	for (int64_t i = 0; i < N; ++i) {
-		sp.distance_array[i] = INF;
-		sp.parent_array[i] = -1;
+		dist[i].store(INF, std::memory_order_relaxed);
+		parent[i].store(-1, std::memory_order_relaxed);
 	}
-	sp.distance_array[root] = 0.0f;
-	sp.parent_array[root] = root;
+	dist[root].store(0.0f, std::memory_order_relaxed);
+	parent[root].store(root, std::memory_order_relaxed);
 
 	std::vector<int64_t> frontier;
 	frontier.push_back(root);
 
-	omp_lock_t* locks = (omp_lock_t*)malloc(N * sizeof(omp_lock_t));
+	std::atomic<int>* seen_epoch = new std::atomic<int>[N];
 	for (int64_t i = 0; i < N; ++i) {
-		omp_init_lock(&locks[i]);
+		seen_epoch[i].store(-1, std::memory_order_relaxed);
 	}
+	int epoch = 0;
 
-	for (int64_t iter = 0; iter < N - 1 && !frontier.empty(); ++iter) {
-		std::vector<char> mark_next((size_t)N, 0);
-		std::vector<int64_t> next_frontier;
-
-		int max_threads = omp_get_max_threads();
-		std::vector<std::vector<int64_t>> local_next(max_threads);
+	for (int64_t iter = 0; iter < N - 1 && !frontier.empty(); ++iter, ++epoch) {
+		std::vector<std::vector<int64_t>> local_next(omp_get_max_threads());
 
 #pragma omp parallel
 		{
@@ -167,7 +166,7 @@ shortest_path sssp_bf_frontier_omp(graph g, int64_t root) {
 #pragma omp for schedule(dynamic, 64)
 			for (size_t fi = 0; fi < frontier.size(); ++fi) {
 				int64_t u = frontier[fi];
-				float du = sp.distance_array[u];
+				float du = dist[u].load(std::memory_order_relaxed);
 				if (du == INF) {
 					continue;
 				}
@@ -178,36 +177,43 @@ shortest_path sssp_bf_frontier_omp(graph g, int64_t root) {
 					int64_t v = g.neighbors[ei];
 					float alt = du + g.weights[ei];
 
-					omp_set_lock(&locks[v]);
-					if (alt < sp.distance_array[v]) {
-						sp.distance_array[v] = alt;
-						sp.parent_array[v] = u;
-						if (!mark_next[(size_t)v]) {
-							mark_next[(size_t)v] = 1;
+					float cur = dist[v].load(std::memory_order_relaxed);
+					bool updated = false;
+					while (alt < cur) {
+						if (dist[v].compare_exchange_weak(cur, alt, std::memory_order_relaxed)) {
+							updated = true;
+							break;
+						}
+					}
+
+					if (updated) {
+						parent[v].store(u, std::memory_order_relaxed);
+						int prev = seen_epoch[v].exchange(epoch, std::memory_order_relaxed);
+						if (prev != epoch) {
 							local.push_back(v);
 						}
 					}
-					omp_unset_lock(&locks[v]);
 				}
 			}
 		}
 
 		size_t total = 0;
-		for (const auto& vec : local_next) {
-			total += vec.size();
-		}
+		for (const auto& vec : local_next) total += vec.size();
+		std::vector<int64_t> next_frontier;
 		next_frontier.reserve(total);
 		for (auto& vec : local_next) {
 			next_frontier.insert(next_frontier.end(), vec.begin(), vec.end());
 		}
-
 		frontier.swap(next_frontier);
 	}
 
 	for (int64_t i = 0; i < N; ++i) {
-		omp_destroy_lock(&locks[i]);
+		sp.distance_array[i] = dist[i].load(std::memory_order_relaxed);
+		sp.parent_array[i] = parent[i].load(std::memory_order_relaxed);
 	}
-	free(locks);
+	delete[] dist;
+	delete[] parent;
+	delete[] seen_epoch;
 
 	auto end = std::chrono::high_resolution_clock::now();
 	sp.time_ms = std::chrono::duration<double, std::milli>(end - start).count();

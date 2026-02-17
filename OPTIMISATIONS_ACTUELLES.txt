@@ -129,3 +129,13 @@ Remarque
   - Exporte un CSV consolidé:
     threads, mode, k2_ms, k3_ms, k2_speedup_vs_ref, k3_speedup_vs_ref
   - Objectif: mesurer l’impact incrémental de chaque optimisation.
+
+  14) Ciblage machine ROMEO (2x96c EPYC 9654, 1152-1536 Go, 100GbE)
+  - Compilation: ajouter -march=znver4 -Ofast -flto -funroll-loops -fomit-frame-pointer -fno-math-errno -DNDEBUG (g++/clang++) tout en gardant -fopenmp. Attendu: +5-10% CPU en mono-noeud.
+  - Affinité / NUMA (mononoeud OpenMP): tester OMP_PROC_BIND=spread + OMP_PLACES=cores, comparer OMP_NUM_THREADS=96 (par socket) vs 192 (2 sockets) pour limiter les écritures cross-CCD; option numactl --interleave=all lors de la génération du graphe pour répartir la mémoire (first-touch parallèle sur CSR).
+  - Hugepages: madvise(MADV_HUGEPAGE) sur neighbors/weights/slicing_idx après construction CSR pour réduire les TLB miss sur gros graphes.
+  - BFS top-down OMP: remplacer l’unordered_set du mode hybrid par un seul couple frontier_vector + AtomicBitSet; éviter le scan O(V) de m_u en maintenant un compteur d’arêtes non visitées (maj en O(frontier_edges)); buffer next par socket puis fusion pour limiter les writes cross-socket.
+  - BFS bottom-up / hybrid: conserver bitset; ajouter prefetch sur neighbors (ex: __builtin_prefetch(neighbors + i + 8)) et affiner C_TB/C_BT sur traces Romeo (rapide si frontier grossit tôt).
+  - SSSP frontier OMP: remplacer les verrous par un CAS sur distance (atomic<float> ou atomic_ref) et garder une frontier locale par thread puis fusion; option bucket/delta-stepping légère si besoin de convergence plus rapide.
+  - Benchmarks: scripts SLURM à dupliquer en profils "96T socket" vs "192T interleave" + export explicite des variables d’affinité; éviter le flag de rebuild forcé (-B) pour ne pas rallonger les jobs.
+  - Multi-noeuds (si passage MPI plus tard): 1 rang par socket, alltoallv non bloquant avec bitmap/WAH compressée avant envoi, overlap via double buffer compute/comm.
