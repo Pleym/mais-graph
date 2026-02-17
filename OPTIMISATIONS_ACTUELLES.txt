@@ -1,0 +1,57 @@
+Optimisations / améliorations déjà appliquées (état actuel)
+Date: 17/02/2026
+
+1) Structuration du projet pour K1/K2/K3 (version de référence)
+- Reprise du dépôt de base et recentrage sur:
+  - K1: génération/CSR via from_edge_list
+  - K2: BFS de référence (bfs_formal)
+  - K3: SSSP de référence (Bellman-Ford: sssp_bf)
+- Objectif: base stable et comparable avant d’ajouter des optimisations algorithmiques.
+
+2) Nettoyage fonctionnel de l’exécution
+- Point d’entrée main simplifié pour exécuter explicitement K1/K2/K3.
+- Paramétrage d’exécution clair: ./main [scale] [edge_factor] [roots].
+- Sortie standardisée des métriques K2/K3 (avg_time, teps) pour exploitation automatisée.
+
+3) Scripts SLURM pour benchmark
+- Ajout d’un script strong scaling:
+  - kernel_1_2_experiments.sh
+  - problème fixe, variation du nombre de threads (1..64)
+- Ajout d’un script weak scaling:
+  - kernel_weak_scaling.sh
+  - augmentation de la taille (scale) en fonction du nombre de threads
+- Ajout d’un script de comparaison de performance:
+  - kernel_perf_compare.sh
+  - comparaison REF vs OPT avec export CSV de speedup (K2/K3)
+
+4) Instrumentation / traçabilité des résultats
+- Création de dossiers de résultats dédiés par job:
+  - results_strong_<jobid>
+  - results_weak_<jobid>
+  - results_perf_<jobid>
+- Logs de runs par configuration (thread count / scale) conservés dans ces dossiers.
+- Génération d’un speedup.csv pour la comparaison REF/OPT.
+
+5) Nommage lisible des logs SLURM
+- Strong: strong_%x_%j.out / strong_%x_%j.err
+- Weak: weak_%x_%j.out / weak_%x_%j.err
+- Perf: perf_%x_%j.out / perf_%x_%j.err
+- Ajout d’un run_status.log dans chaque dossier results_* pour suivre l’avancement intra-job.
+
+6) Variables d’environnement performance côté runtime
+- Utilisation de:
+  - OMP_NUM_THREADS=<t>
+  - OMP_PROC_BIND=close
+  - OMP_PLACES=cores
+- But: meilleure stabilité des mesures et réduction du bruit d’ordonnancement.
+
+7) Robustesse pratique des scripts
+- Usage de set -euo pipefail pour capter rapidement les erreurs.
+- Paramètres REF_BIN / OPT_BIN dans le script de comparaison (surcharge possible via sbatch --export).
+
+Remarque
+- Cette base est volontairement "référence + benchmark" pour quantifier proprement les gains.
+- Les futures optimisations issues du PDF seront ajoutées ensuite dans le code BFS/SSSP et documentées ici avec:
+  - principe,
+  - impact attendu,
+  - impact mesuré (speedup, efficacité, scalabilité).
