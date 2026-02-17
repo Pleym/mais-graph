@@ -43,3 +43,11 @@ sbatch kernel_1_2_experiments.sh
 sbatch kernel_weak_scaling.sh
 sbatch --export=ALL,REF_BIN=./main_ref,OPT_BIN=./main_opt kernel_perf_compare.sh
 ```
+
+Nommage des logs SLURM:
+
+- strong: `strong_Graph500_strong_scaling_<jobid>.out/.err`
+- weak: `weak_Graph500_weak_scaling_<jobid>.out/.err`
+- perf: `perf_Graph500_perf_compare_<jobid>.out/.err`
+
+Chaque script écrit aussi un `run_status.log` dans son dossier `results_*_<jobid>/`.

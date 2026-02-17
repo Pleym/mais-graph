@@ -8,8 +8,8 @@
 #SBATCH --cpus-per-task=64
 #SBATCH --job-name="Graph500_perf_compare"
 #SBATCH --comment="Speedup reference vs optimise"
-#SBATCH --error=job.%J.err
-#SBATCH --output=job.%J.out
+#SBATCH --error=perf_%x_%j.err
+#SBATCH --output=perf_%x_%j.out
 
 set -euo pipefail
 
@@ -62,7 +62,7 @@ ROOTS=16
 THREADS_LIST="1 2 4 8 16 32 64"
 
 for t in $THREADS_LIST; do
-    echo "=== Perf compare: threads=$t ===" | tee -a "job.$SLURM_JOBID.out"
+    echo "=== Perf compare: threads=$t ===" | tee -a "$RESULTS_DIR/run_status.log"
 
     REF_LOG="$RESULTS_DIR/ref_t${t}.log"
     OPT_LOG="$RESULTS_DIR/opt_t${t}.log"

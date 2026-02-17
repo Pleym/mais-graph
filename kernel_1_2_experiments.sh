@@ -8,8 +8,8 @@
 #SBATCH --cpus-per-task=64
 #SBATCH --job-name="Graph500_strong_scaling"
 #SBATCH --comment="Strong scaling K1/K2/K3"
-#SBATCH --error=job.%J.err
-#SBATCH --output=job.%J.out
+#SBATCH --error=strong_%x_%j.err
+#SBATCH --output=strong_%x_%j.out
 
 set -euo pipefail
 
@@ -39,7 +39,7 @@ ROOTS=16
 
 THREADS_LIST="1 2 4 8 16 32 64"
 for t in $THREADS_LIST; do
-        echo "=== Strong scaling: threads=$t scale=$SCALE edge_factor=$EDGE_FACTOR roots=$ROOTS ===" | tee -a "job.$SLURM_JOBID.out"
+        echo "=== Strong scaling: threads=$t scale=$SCALE edge_factor=$EDGE_FACTOR roots=$ROOTS ===" | tee -a "$RESULTS_DIR/run_status.log"
         OMP_NUM_THREADS=$t OMP_PROC_BIND=close OMP_PLACES=cores \
         srun -n1 -c "$t" --cpu-bind=cores ./main "$SCALE" "$EDGE_FACTOR" "$ROOTS" \
                 > "$RESULTS_DIR/strong_t${t}.log" 2>&1

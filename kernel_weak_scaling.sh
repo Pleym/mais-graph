@@ -8,8 +8,8 @@
 #SBATCH --cpus-per-task=64
 #SBATCH --job-name="Graph500_weak_scaling"
 #SBATCH --comment="Weak scaling K1/K2/K3"
-#SBATCH --error=job.%J.err
-#SBATCH --output=job.%J.out
+#SBATCH --error=weak_%x_%j.err
+#SBATCH --output=weak_%x_%j.out
 
 set -euo pipefail
 
@@ -48,7 +48,7 @@ for t in $THREADS_LIST; do
 
     SCALE=$((BASE_SCALE + exp))
 
-    echo "=== Weak scaling: threads=$t scale=$SCALE edge_factor=$EDGE_FACTOR roots=$ROOTS ===" | tee -a "job.$SLURM_JOBID.out"
+    echo "=== Weak scaling: threads=$t scale=$SCALE edge_factor=$EDGE_FACTOR roots=$ROOTS ===" | tee -a "$RESULTS_DIR/run_status.log"
     OMP_NUM_THREADS=$t OMP_PROC_BIND=close OMP_PLACES=cores \
     srun -n1 -c "$t" --cpu-bind=cores ./main "$SCALE" "$EDGE_FACTOR" "$ROOTS" \
         > "$RESULTS_DIR/weak_t${t}_scale${SCALE}.log" 2>&1
