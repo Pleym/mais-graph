@@ -401,7 +401,7 @@ graph from_edge_list_v2_parallel(edge_list input_list) {
 
 	// Sort them lexicographically
 	auto start_sort = std::chrono::high_resolution_clock::now();
-	tbb::parallel_sort(edges, edges + (input_list.length * 2), [&](const edge& e1, const edge& e2) {
+							std::sort(edges, edges + (input_list.length * 2), [&](const edge& e1, const edge& e2) {
 		if (e1.u != e2.u) {
 			return e1.u < e2.u;
 		}
