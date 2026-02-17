@@ -30,6 +30,11 @@ typedef struct mrg_state {
 	uint_fast32_t z1, z2, z3, z4, z5;
 } mrg_state;
 
+// Transition matrix for skip-ahead tables (3x3, integer coefficients).
+typedef struct mrg_transition_matrix {
+	int64_t m[3][3];
+} mrg_transition_matrix;
+
 /* Returns integer value in [0, 2^31-1) using original transition matrix */
 uint_fast32_t mrg_get_uint_orig(mrg_state* state);
 
