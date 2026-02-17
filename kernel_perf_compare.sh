@@ -29,10 +29,13 @@ cd "${SLURM_SUBMIT_DIR:-$PWD}"
 # Binaries à comparer:
 # - REF_BIN: implémentation de référence
 # - OPT_BIN: implémentation optimisée
+# - MODE_REF / MODE_OPT: arguments de mode passés à main (ref, bfs_opt, sssp_opt, all_opt, hybrid)
 # Tu peux les surcharger à la soumission:
-# sbatch --export=ALL,REF_BIN=./main_ref,OPT_BIN=./main_opt kernel_perf_compare.sh
-REF_BIN="${REF_BIN:-./main_ref}"
-OPT_BIN="${OPT_BIN:-./main_opt}"
+# sbatch --export=ALL,REF_BIN=./main,OPT_BIN=./main,MODE_REF=ref,MODE_OPT=all_opt kernel_perf_compare.sh
+REF_BIN="${REF_BIN:-./main}"
+OPT_BIN="${OPT_BIN:-./main}"
+MODE_REF="${MODE_REF:-ref}"
+MODE_OPT="${MODE_OPT:-all_opt}"
 
 if [ ! -x "$REF_BIN" ] || [ ! -x "$OPT_BIN" ]; then
     echo "ERREUR: binaire introuvable ou non exécutable"
@@ -68,10 +71,10 @@ for t in $THREADS_LIST; do
     OPT_LOG="$RESULTS_DIR/opt_t${t}.log"
 
     OMP_NUM_THREADS=$t OMP_PROC_BIND=close OMP_PLACES=cores \
-    srun -n1 -c "$t" --cpu-bind=cores "$REF_BIN" "$SCALE" "$EDGE_FACTOR" "$ROOTS" > "$REF_LOG" 2>&1
+    srun -n1 -c "$t" --cpu-bind=cores "$REF_BIN" "$SCALE" "$EDGE_FACTOR" "$ROOTS" "$MODE_REF" > "$REF_LOG" 2>&1
 
     OMP_NUM_THREADS=$t OMP_PROC_BIND=close OMP_PLACES=cores \
-    srun -n1 -c "$t" --cpu-bind=cores "$OPT_BIN" "$SCALE" "$EDGE_FACTOR" "$ROOTS" > "$OPT_LOG" 2>&1
+    srun -n1 -c "$t" --cpu-bind=cores "$OPT_BIN" "$SCALE" "$EDGE_FACTOR" "$ROOTS" "$MODE_OPT" > "$OPT_LOG" 2>&1
 
     k2_ref=$(extract_k2_ms "$REF_LOG")
     k2_opt=$(extract_k2_ms "$OPT_LOG")

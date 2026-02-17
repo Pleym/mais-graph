@@ -51,17 +51,15 @@ for t in $THREADS_LIST; do
 
     echo "=== Weak scaling: threads=$t scale=$SCALE edge_factor=$EDGE_FACTOR roots=$ROOTS ===" | tee -a "$RESULTS_DIR/run_status.log"
 
-    # Affinité: si t<=96 on reste sur un socket; sinon interleave mem + spread cores
+    # Affinité: t<=96 -> un socket via cpu-bind=cores; t>96 -> interleave=all
     if [ "$t" -le 96 ]; then
-        BIND_OPTS=(--cpunodebind=0 --membind=0)
-        OMP_BIND=spread
+        SRUN_OPTS=(--cpu-bind=cores)
     else
-        BIND_OPTS=(--interleave=all)
-        OMP_BIND=spread
+        SRUN_OPTS=(--cpu-bind=cores --mem-bind=interleave)
     fi
 
-    OMP_NUM_THREADS=$t OMP_PROC_BIND=$OMP_BIND OMP_PLACES=cores \
-    srun -n1 -c "$t" "${BIND_OPTS[@]}" ./main "$SCALE" "$EDGE_FACTOR" "$ROOTS" \
+    OMP_NUM_THREADS=$t OMP_PROC_BIND=spread OMP_PLACES=cores \
+    srun -n1 -c "$t" "${SRUN_OPTS[@]}" ./main "$SCALE" "$EDGE_FACTOR" "$ROOTS" "${MODE:-ref}" \
         > "$RESULTS_DIR/weak_t${t}_scale${SCALE}.log" 2>&1
 done
 

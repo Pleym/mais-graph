@@ -41,7 +41,7 @@ THREADS_LIST="1 2 4 8 16 32 64"
 for t in $THREADS_LIST; do
         echo "=== Strong scaling: threads=$t scale=$SCALE edge_factor=$EDGE_FACTOR roots=$ROOTS ===" | tee -a "$RESULTS_DIR/run_status.log"
         OMP_NUM_THREADS=$t OMP_PROC_BIND=close OMP_PLACES=cores \
-        srun -n1 -c "$t" --cpu-bind=cores ./main "$SCALE" "$EDGE_FACTOR" "$ROOTS" \
+        srun -n1 -c "$t" --cpu-bind=cores ./main "$SCALE" "$EDGE_FACTOR" "$ROOTS" "${MODE:-ref}" \
                 > "$RESULTS_DIR/strong_t${t}.log" 2>&1
 done
 
