@@ -49,11 +49,11 @@ CSV="$RESULTS_DIR/speedup.csv"
 echo "threads,k2_ref_ms,k2_opt_ms,k2_speedup,k3_ref_ms,k3_opt_ms,k3_speedup" > "$CSV"
 
 extract_k2_ms() {
-    awk -F'avg_time=' '/K2 \(bfs reference\): avg_time=/{split($2,a," "); print a[1]; exit}' "$1"
+    awk -F'avg_time=' '/K2 \(bfs .*\): avg_time=/{split($2,a," "); print a[1]; exit}' "$1"
 }
 
 extract_k3_ms() {
-    awk -F'avg_time=' '/K3 \(sssp reference BF\): avg_time=/{split($2,a," "); print a[1]; exit}' "$1"
+    awk -F'avg_time=' '/K3 \(sssp .*\): avg_time=/{split($2,a," "); print a[1]; exit}' "$1"
 }
 
 SCALE=12

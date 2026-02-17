@@ -2,12 +2,14 @@
 #include "bitset.hpp"
 #include "gen_graph.hpp"
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <omp.h>
 #include <queue>
 #include <unordered_set>
 #include <vector>
@@ -135,6 +137,73 @@ bfs_result bfs_formal(graph& g, int64_t source) {
 	auto time_ms = std::chrono::duration<double, std::milli>(end - start).count();
 
 	free(visited);
+
+	return (bfs_result){
+		.parent_array = parents,
+		.teps = 0.0,
+		.time_ms = time_ms,
+	};
+}
+
+bfs_result bfs_top_down_omp_cas(graph& g, int64_t source) {
+	auto start = std::chrono::high_resolution_clock::now();
+
+	std::vector<int64_t> frontier;
+	std::vector<int64_t> next_frontier;
+	frontier.push_back(source);
+
+	std::atomic<int64_t>* parents_atomic = new std::atomic<int64_t>[g.nb_nodes];
+	for (int64_t i = 0; i < g.nb_nodes; ++i) {
+		parents_atomic[i].store(-1, std::memory_order_relaxed);
+	}
+	parents_atomic[source].store(source, std::memory_order_relaxed);
+
+	while (!frontier.empty()) {
+		int max_threads = omp_get_max_threads();
+		std::vector<std::vector<int64_t>> local_next(max_threads);
+
+#pragma omp parallel
+		{
+			int tid = omp_get_thread_num();
+			auto& local = local_next[tid];
+
+#pragma omp for schedule(dynamic, 64)
+			for (size_t idx = 0; idx < frontier.size(); ++idx) {
+				int64_t node = frontier[idx];
+				for_each_neighbor(g, node, [&](int64_t neighbor, float _weight) {
+					int64_t expected = -1;
+					if (parents_atomic[neighbor].compare_exchange_strong(
+							expected,
+							node,
+							std::memory_order_relaxed,
+							std::memory_order_relaxed)) {
+						local.push_back(neighbor);
+					}
+				});
+			}
+		}
+
+		next_frontier.clear();
+		size_t total = 0;
+		for (const auto& v : local_next) {
+			total += v.size();
+		}
+		next_frontier.reserve(total);
+		for (auto& v : local_next) {
+			next_frontier.insert(next_frontier.end(), v.begin(), v.end());
+		}
+
+		frontier.swap(next_frontier);
+	}
+
+	int64_t* parents = (int64_t*)malloc(g.nb_nodes * sizeof(int64_t));
+	for (int64_t i = 0; i < g.nb_nodes; ++i) {
+		parents[i] = parents_atomic[i].load(std::memory_order_relaxed);
+	}
+	delete[] parents_atomic;
+
+	auto end = std::chrono::high_resolution_clock::now();
+	auto time_ms = std::chrono::duration<double, std::milli>(end - start).count();
 
 	return (bfs_result){
 		.parent_array = parents,

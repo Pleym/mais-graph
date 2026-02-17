@@ -108,3 +108,24 @@ Remarque
   - ex: ./main <scale> <edge_factor> <roots> <bfs_mode>
 - Étape 4: (optionnel) prototype compression frontier pour scénario MPI
   - tester d’abord compression locale (bitmap -> WAH/RLE-like) pour valider le gain brut.
+
+12) Implémentations ajoutées (code C/C++)
+- BFS optimisé: bfs_top_down_omp_cas
+  - Frontière niveau-par-niveau (top-down)
+  - Visite atomique via compare_exchange (CAS) pour éviter les races sur parents[v]
+  - Buffers locaux par thread pour construire next_frontier avec faible contention
+- SSSP optimisé: sssp_bf_frontier_omp
+  - Bellman-Ford à frontière active (on ne relaxe que les sommets modifiés)
+  - Parallélisation OpenMP des sommets actifs
+  - Verrous par sommet pour sécuriser les mises à jour concurrentes de distance/parent
+- Main paramétrable par mode:
+  - ref | bfs_opt | sssp_opt | all_opt | hybrid
+  - Permet une comparaison progressive et logique des optimisations.
+
+13) Pipeline d’évaluation optimisation par optimisation (Bash / SLURM)
+- Nouveau script: kernel_optimization_pipeline.sh
+  - Lance successivement ref -> bfs_opt -> sssp_opt -> all_opt -> hybrid
+  - Fait varier les threads (1..64)
+  - Exporte un CSV consolidé:
+    threads, mode, k2_ms, k3_ms, k2_speedup_vs_ref, k3_speedup_vs_ref
+  - Objectif: mesurer l’impact incrémental de chaque optimisation.

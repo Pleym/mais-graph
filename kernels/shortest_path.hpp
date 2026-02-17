@@ -13,6 +13,7 @@ typedef struct {
 } shortest_path;
 
 shortest_path sssp_bf(graph source_graph, int64_t root);
+shortest_path sssp_bf_frontier_omp(graph source_graph, int64_t root);
 void shortest_path_destroy(shortest_path& sp);
 
 #endif

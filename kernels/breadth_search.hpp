@@ -16,5 +16,7 @@ typedef struct bfs_result {
 
 bfs_result bfs(graph& g, int64_t source);
 bfs_result bfs_formal(graph& g, int64_t source);
+bfs_result bfs_top_down_omp_cas(graph& g, int64_t source);
+bfs_result bfs_hybrid(graph& g, int64_t source);
 
 #endif
