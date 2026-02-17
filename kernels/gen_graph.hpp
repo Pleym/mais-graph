@@ -14,6 +14,8 @@ typedef struct {
 } graph;
 
 graph from_edge_list(edge_list input_list);
+graph from_edge_list_v2(edge_list input_list);
+graph from_edge_list_v3_parallel(edge_list input_list);
 
 void graph_destroy(graph& g);
 

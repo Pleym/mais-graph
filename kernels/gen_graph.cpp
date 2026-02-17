@@ -697,5 +697,5 @@ void from_edge_list_try_all(edge_list input_list) {
 }
 
 graph from_edge_list(edge_list input_list) {
-	return from_edge_list_v2(input_list);
+	return from_edge_list_v3_parallel(input_list);
 }
